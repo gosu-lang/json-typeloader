@@ -138,8 +138,8 @@ public abstract class JSchemaTypeBase extends TypeBase implements IJSchemaType, 
   }
 
   @Override
-  public List<? extends IType> getInterfaces() {
-    return Collections.emptyList();
+  public IType[] getInterfaces() {
+    return IType.EMPTY_ARRAY;
   }
 
   @Override

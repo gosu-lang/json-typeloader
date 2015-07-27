@@ -1,7 +1,10 @@
 package org.jschema.typeloader;
 
+import gw.config.CommonServices;
+import gw.fs.IDirectory;
 import gw.fs.IFile;
 import gw.lang.reflect.IType;
+import gw.lang.reflect.RefreshKind;
 import gw.lang.reflect.TypeLoaderBase;
 import gw.lang.reflect.TypeSystem;
 import gw.lang.reflect.module.IModule;
@@ -12,24 +15,40 @@ import org.jschema.model.JsonMap;
 import org.jschema.parser.JSchemaParser;
 import org.jschema.parser.JsonParseError;
 import org.jschema.parser.JsonParseException;
-import org.jschema.typeloader.rpc.JSchemaCustomizedRPCType;
-import org.jschema.typeloader.rpc.JSchemaRPCType;
 import org.jschema.util.JSchemaUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
-import java.util.logging.Logger;
 
 public class JSchemaTypeLoader extends TypeLoaderBase {
 
   private Map<String, IJSchemaType> _rawTypes = new HashMap<String, IJSchemaType>();
   private Map<IFile, List<String>> _filesToTypes = new HashMap<IFile, List<String>>();
 
-  private static final String JSC_RPC_EXT = "jsc-rpc";
-  private static final String JSC_EXT = "jsc";
+  private static final String JSCHEMA_EXT = "jschema";
   private static final String JSON_EXT = "json";
   private boolean _initing;
+  private Set<String> _namespaces;
+
+  public boolean handlesNonPrefixLoads() {
+    return true;
+  }
+
+  private LockingLazyVar<List<JsonFile>> _jscFiles = new LockingLazyVar<List<JsonFile>>() {
+    @Override
+    protected List<JsonFile> init() {
+      return findFilesOfType( JSCHEMA_EXT );
+    }
+  };
+
+  private LockingLazyVar<List<JsonFile>> _jsonFiles = new LockingLazyVar<List<JsonFile>>() {
+    @Override
+    protected List<JsonFile> init() {
+      return findFilesOfType(JSON_EXT);
+    }
+  };
+
 
   public JSchemaTypeLoader(IModule env) {
     super(env);
@@ -45,7 +64,20 @@ public class JSchemaTypeLoader extends TypeLoaderBase {
     return TypeSystem.getOrCreateTypeReference(iType);
   }
 
-  //TODO cgross - this should be lazy
+  @Override
+  public Set<? extends CharSequence> getAllNamespaces()
+  {
+    if (_namespaces == null) {
+      try {
+        _namespaces = TypeSystem.getNamespacesFromTypeNames(getAllTypeNames(), new HashSet<String>());
+      } catch (NullPointerException e) {
+        //!! hack to get past dependency issue with tests
+        return Collections.emptySet();
+      }
+    }
+    return _namespaces;
+  }
+
   private void maybeInitTypes() {
     if (!_initing) {
       if (_rawTypes.isEmpty()) {
@@ -55,14 +87,6 @@ public class JSchemaTypeLoader extends TypeLoaderBase {
             try {
               jshFile.parseContent();
               addRootType(_rawTypes, new Stack<Map<String, String>>(), jshFile, jshFile.file, _filesToTypes);
-            } catch (Exception e) {
-              throw GosuExceptionUtil.forceThrow(e);
-            }
-          }
-          for (JsonFile jshRpcFile : _jscRpcFiles.get()) {
-            try {
-              jshRpcFile.parseContent();
-              addRpcTypes(_rawTypes, jshRpcFile, jshRpcFile.file, _filesToTypes);
             } catch (Exception e) {
               throw GosuExceptionUtil.forceThrow(e);
             }
@@ -83,35 +107,7 @@ public class JSchemaTypeLoader extends TypeLoaderBase {
     }
   }
 
-  @Override
-  public List<IType> refreshedFile(IFile file) {
-    List<String> typeNames = getTypeNamesForFile(file);
-    if (file.getExtension().equals(JSC_EXT) ||
-        file.getExtension().equals(JSC_RPC_EXT) ||
-        file.getExtension().equals(JSON_EXT)) {
-      _rawTypes.clear();
-      _filesToTypes.clear();
-      if (file.getExtension().equals(JSC_EXT)) {
-        _jscFiles.clear();
-      }
-      if (file.getExtension().equals(JSC_RPC_EXT)) {
-        _jscRpcFiles.clear();
-      }
-      if (file.getExtension().equals(JSON_EXT)) {
-        _jsonFiles.clear();
-      }
-    }
-    ArrayList<IType> types = new ArrayList<IType>();
-    for (String typeName : typeNames) {
-      IType type = TypeSystem.getByFullNameIfValid(typeName);
-      if (type != null) {
-        types.add(type);
-      }
-    }
-    return types;
-  }
-
-  public List<IType> getTypesForFile(IFile file) {
+  public String[] getTypesForFile( IFile file ) {
     ArrayList<IType> types = new ArrayList<IType>();
     List<String> typeNamesForFile = getTypeNamesForFile(file);
     for (String s : typeNamesForFile) {
@@ -120,11 +116,36 @@ public class JSchemaTypeLoader extends TypeLoaderBase {
         types.add(type);
       }
     }
-    return types;
+    return typeNamesForFile.toArray( new String[typeNamesForFile.size()] );
+  }
+
+  @Override
+  public void refreshedNamespace( String namespace, IDirectory dir, RefreshKind kind )
+  {
+    if (_namespaces != null) {
+      if (kind == RefreshKind.CREATION) {
+        _namespaces.add(namespace);
+      } else if (kind == RefreshKind.DELETION) {
+        _namespaces.remove(namespace);
+      }
+    }
+  }
+
+  @Override
+  public boolean hasNamespace( String namespace )
+  {
+    return getAllNamespaces().contains( namespace );
+  }
+
+  @Override
+  public Set<String> computeTypeNames()
+  {
+    maybeInitTypes();
+    return _rawTypes.keySet();
   }
 
   private List<String> getTypeNamesForFile(IFile file) {
-    maybeInitTypes(); //TODO cgross - this really, really needs to be lazy
+    maybeInitTypes();
     List<String> typeNames = _filesToTypes.get(file);
     if (typeNames == null) {
       typeNames = Collections.emptyList();
@@ -183,7 +204,6 @@ public class JSchemaTypeLoader extends TypeLoaderBase {
       } else {
         try {
           typeDefs.push(new HashMap<String, String>());
-          processTypeDefs(rawTypes, typeDefs, name, jsonMap, file, fileMapping);
           for (Object key : jsonMap.keySet()) {
             if (!JSchemaUtils.JSCHEMA_TYPEDEFS_KEY.equals(key)) {
               // RECURSION. This will call for every field in the definition. We rely on the if(o instanceof Map) thing up
@@ -219,98 +239,6 @@ public class JSchemaTypeLoader extends TypeLoaderBase {
     return allTypeDefs;
   }
 
-  private void processTypeDefs(Map<String, IJSchemaType> types, Stack<Map<String, String>> typeDefs, String name, Map o, IFile file, Map<IFile, List<String>> fileMapping) {
-    Object currentTypeDefs = o.get(JSchemaUtils.JSCHEMA_TYPEDEFS_KEY);
-    if (currentTypeDefs instanceof Map) {
-      Set set = ((Map) currentTypeDefs).keySet();
-      List<IJSchemaType> previousTypeDefs = new ArrayList<IJSchemaType>();
-      for (Object typeDefTypeName : set) {
-        String rawName = typeDefTypeName.toString();
-        String relativeName = JSchemaUtils.convertJSONStringToGosuIdentifier(rawName);
-        String fullyQualifiedName = name + "." + relativeName;
-        typeDefs.peek().put(rawName, fullyQualifiedName);
-        addTypes(types, typeDefs, fullyQualifiedName, ((Map) currentTypeDefs).get(typeDefTypeName), file, fileMapping);
-        for (IJSchemaType previousTypeDef : previousTypeDefs) {
-          previousTypeDef.getTypeDefs().put(rawName, fullyQualifiedName);
-        }
-        previousTypeDefs.add(types.get(fullyQualifiedName));
-      }
-    }
-  }
-
-  private void addRpcTypes(Map<String, IJSchemaType> types, JsonFile jshRpcFile, IFile file, Map<IFile, List<String>> fileMapping)
-  {
-    Stack<Map<String, String>> typeDefs = new Stack<Map<String, String>>();
-    typeDefs.push(new HashMap<String, String>());
-    Map<String, Map<String, Object>> defaultValues = new HashMap<String, Map<String, Object>>();
-    if (jshRpcFile.content instanceof Map) {
-      processTypeDefs(types, typeDefs, jshRpcFile.rootTypeName, (Map) jshRpcFile.content, file, fileMapping);
-      Object functions = ((Map) jshRpcFile.content).get(JSchemaUtils.JSCHEMA_FUNCTIONS_KEY);
-      if (functions instanceof List) {
-        for (Object function : (List) functions) {
-          if (function instanceof Map) {
-            Map functionMap = (Map) function;
-            Object name = functionMap.get("name");
-            if (name == null) {
-              name = "badName";
-            }
-            String str = name.toString();
-            String functionTypeName =  jshRpcFile.rootTypeName + "." + JSchemaUtils.convertJSONStringToGosuIdentifier(str);
-
-            // add parameter names
-            Object args = functionMap.get("args");
-            if (args instanceof List) {
-              for (Object arg : (List) args) {
-                if (arg instanceof Map) {
-                  Set argSpecKeys = ((Map) arg).keySet();
-                  for (Object key : argSpecKeys) {
-                    if (key.equals("default")) {
-                      Map<String, Object> argsMap = defaultValues.get(str);
-                      if (argsMap == null) {
-                        argsMap = new HashMap<String, Object>();
-                        defaultValues.put(str, argsMap);
-                      }
-                      argsMap.put(((Map) arg).keySet().iterator().next().toString(), ((Map) arg).get("default"));
-                    } else if (key.equals("description")) {
-                      //ignore
-                    } else {
-                      addTypes(types,
-                        typeDefs, functionTypeName + "." + JSchemaUtils.convertJSONStringToGosuIdentifier(key.toString()),
-                        ((Map) arg).get(key), file, fileMapping);
-                    }
-                  }
-                }
-              }
-            }
-            // add the return type
-            Object returns = ((Map) function).get("returns");
-            if (returns != null) {
-              addTypes(types, typeDefs, functionTypeName, returns, file, fileMapping);
-            }
-
-            if (types.get(functionTypeName) == null) {
-              // add in a dummy type to hold inner classes
-              addTypes(types, typeDefs, functionTypeName, new HashMap(), file, fileMapping);
-            }
-          }
-        }
-      }
-      JSchemaRPCType rpcType = new JSchemaRPCType(jshRpcFile.rootTypeName, this, jshRpcFile.content, typeDefs.peek(), defaultValues, jshRpcFile.stringContent);
-      putType(types, rpcType.getName(), rpcType, file, fileMapping);
-      rpcType.addErrors(jshRpcFile.errors);
-
-      String customizedTypeName = jshRpcFile.rootTypeName + JSchemaCustomizedRPCType.TYPE_SUFFIX;
-      JSchemaCustomizedRPCType rpcType2 = new JSchemaCustomizedRPCType(customizedTypeName, this, jshRpcFile.content, typeDefs.peek(), defaultValues, jshRpcFile.stringContent);
-      putType(types, rpcType2.getName(), rpcType2, file, fileMapping);
-    }
-  }
-
-  @Override
-  public Set<String> getAllTypeNames() {
-    maybeInitTypes();
-    return new HashSet<String>( _rawTypes.keySet() );
-  }
-
   @Override
   public List<String> getHandledPrefixes() {
     return Collections.emptyList();
@@ -319,36 +247,9 @@ public class JSchemaTypeLoader extends TypeLoaderBase {
   /*
   * Default implementation to handle Gosu 0.9 reqs
   */
-//  @Override TODO restore later
-  public boolean handlesNonPrefixLoads() {
-    return true;
-  }
-
-  private LockingLazyVar<List<JsonFile>> _jscFiles = new LockingLazyVar<List<JsonFile>>() {
-    @Override
-    protected List<JsonFile> init() {
-      return findFilesOfType(JSC_EXT);
-    }
-  };
-
-  private LockingLazyVar<List<JsonFile>> _jscRpcFiles = new LockingLazyVar<List<JsonFile>>() {
-    @Override
-    protected List<JsonFile> init() {
-      return findFilesOfType(JSC_RPC_EXT);
-    }
-  };
-
-  private LockingLazyVar<List<JsonFile>> _jsonFiles = new LockingLazyVar<List<JsonFile>>() {
-    @Override
-    protected List<JsonFile> init() {
-      return findFilesOfType(JSON_EXT);
-    }
-  };
-
   private List<JsonFile> findFilesOfType(String extension) {
     List<JsonFile> init = new java.util.ArrayList<JsonFile>();
-
-    List<Pair<String, IFile>> files = getModule().getFileRepository().findAllFilesByExtension(extension);
+    List<Pair<String, IFile>> files = findAllFilesByExtension( getModule(), extension );
     for (Pair<String, IFile> pair : files) {
       JsonFile current = new JsonFile();
       current.file = pair.getSecond();
@@ -405,5 +306,46 @@ public class JSchemaTypeLoader extends TypeLoaderBase {
         errors.add(new JsonParseError("Unable to open JSON file " + file.getPath().getFileSystemPathString() + ": " + e.getMessage(), 0, 0));
       }
     }
+  }
+
+  public static List<Pair<String, IFile>> findAllFilesByExtension( IModule module, String extension ) {
+    List<Pair<String, IFile>> results = new ArrayList<>();
+
+    for (IDirectory sourceEntry : module.getSourcePath()) {
+      if (sourceEntry.exists()) {
+        String prefix = sourceEntry.getName().equals(IModule.CONFIG_RESOURCE_PREFIX) ? IModule.CONFIG_RESOURCE_PREFIX : "";
+        addAllLocalResourceFilesByExtensionInternal(module, prefix, sourceEntry, extension, results);
+      }
+    }
+    return results;
+  }
+
+  private static void addAllLocalResourceFilesByExtensionInternal( IModule module, String relativePath, IDirectory dir, String extension, List<Pair<String, IFile>> results ) {
+    List<IDirectory> excludedPath = Arrays.asList(module.getFileRepository().getExcludedPath());
+    if ( excludedPath.contains( dir )) {
+      return;
+    }
+    if(!CommonServices.getPlatformHelper().isPathIgnored(relativePath)) {
+      for(IFile file : dir.listFiles()) {
+        if(file.getName().endsWith(extension)) {
+          String path = appendResourceNameToPath(relativePath, file.getName());
+          results.add(new Pair<>(path, file));
+        }
+      }
+      for(IDirectory subdir : dir.listDirs()) {
+        String path = appendResourceNameToPath(relativePath, subdir.getName());
+        addAllLocalResourceFilesByExtensionInternal(module, path, subdir, extension, results);
+      }
+    }
+  }
+
+  private static String appendResourceNameToPath(String relativePath, String resourceName) {
+    String path;
+    if(relativePath.length() > 0) {
+      path = relativePath + '/' + resourceName;
+    } else {
+      path = resourceName;
+    }
+    return path;
   }
 }

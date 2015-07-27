@@ -1,9 +1,7 @@
 package org.jschema.typeloader;
 
-import gw.internal.gosu.parser.ClassAnnotationInfo;
 import gw.lang.Autoinsert;
 import gw.lang.GosuShop;
-import gw.lang.annotation.Annotations;
 import gw.lang.function.Function0;
 import gw.lang.reflect.*;
 import gw.lang.reflect.IRelativeTypeInfo.Accessibility;
@@ -12,9 +10,7 @@ import gw.util.concurrent.LockingLazyVar;
 import org.jschema.model.JsonList;
 import org.jschema.model.JsonMap;
 import org.jschema.model.JsonObject;
-import org.jschema.rpc.RPCDefaults;
-import org.jschema.rpc.RPCLoggerCallback;
-import org.jschema.rpc.SimpleRPCCallHandler;
+import org.jschema.util.SimpleRPCCallHandler;
 import org.jschema.util.JSchemaUtils;
 
 import java.io.BufferedReader;
@@ -29,27 +25,27 @@ public class JSchemaTypeInfo extends TypeInfoBase {
   private Map<String, String> propertyNameToJsonSlot = new HashMap<String, String>();
   private List<IPropertyInfo> properties;
 
-  private LockingLazyVar<List<IMethodInfo>> methods = new LockingLazyVar<List<IMethodInfo>>() {
+  private LockingLazyVar<MethodList> methods = new LockingLazyVar<MethodList>() {
     @Override
-    protected List<IMethodInfo> init() {
+    protected MethodList init() {
       return buildMethods();
     }
   };
   private IMethodInfo _convertToMethod;
   private IMethodInfo _findMethod;
 
-  private List<IMethodInfo> buildMethods() {
+  private MethodList buildMethods() {
     if (isJsonEnum()) {
-      return (List) TypeSystem.get(JSchemaEnumType.JsonEnumValue.class).getTypeInfo().getMethods();
+      return TypeSystem.get(JSchemaEnumType.JsonEnumValue.class).getTypeInfo().getMethods();
     } else if (isListWrapper()) {
-      List<IMethodInfo> typeMethods = new ArrayList<IMethodInfo>();
+      MethodList typeMethods = new MethodList();
 
       addStaticProductionMethods(typeMethods, ((JSchemaListWrapperType) getOwnersType()).getWrappedType(), this);
 
       return typeMethods;
     } else {
 
-      List<IMethodInfo> typeMethods = new ArrayList<IMethodInfo>();
+      MethodList typeMethods = new MethodList();
 
       addStaticProductionMethods(typeMethods, getOwnersType(), this);
 
@@ -94,30 +90,6 @@ public class JSchemaTypeInfo extends TypeInfoBase {
         })
         .build(JSchemaTypeInfo.this));
 
-      ITypeVariableType typeVar = TypeSystem.getOrCreateTypeVariableType("T", JavaTypes.OBJECT(), getOwnersType());
-      IType typeVarType = TypeSystem.getTypeFromObject(typeVar);
-
-      _convertToMethod = new MethodInfoBuilder()
-        .withName("convertTo")
-        .withTypeVars(typeVar.getTypeVarDef().getTypeVar())
-        .withParameters(new ParameterInfoBuilder()
-          .withName("type")
-          .withType(typeVarType))
-        .withReturnType(typeVar)
-        .withCallHandler(new IMethodCallHandler() {
-          @Override
-          public Object handleCall(Object ctx, Object... args) {
-            JsonMap ctxMap = (JsonMap) ctx;
-            IType targetType = (IType) args[0];
-            if (!(targetType instanceof IJSchemaType)) {
-              throw new IllegalArgumentException("Can only be converted to other JSchema types!");
-            }
-            return JSchemaUtils.cloneToType((IJSchemaType) targetType, ctxMap, getOwnersType());
-          }
-        })
-        .build(JSchemaTypeInfo.this);
-      typeMethods.add(_convertToMethod);
-
       IType outerParent = TypeSystem.getByFullNameIfValid(getOwnersType().getNamespace());
       final IType parentType;
       if (outerParent instanceof IJSchemaType && !thisIsTypedefFor((IJSchemaType) outerParent)) {
@@ -153,30 +125,12 @@ public class JSchemaTypeInfo extends TypeInfoBase {
           }
         }).build(this));
 
-      ITypeVariableType typeVar2 = TypeSystem.getOrCreateTypeVariableType("T", JavaTypes.OBJECT(), TypeSystem.getTypeReference(getOwnersType()));
-      IType typeVarType2 = TypeSystem.getTypeFromObject(typeVar2);
-      _findMethod = new MethodInfoBuilder()
-        .withName("find")
-        .withTypeVars(typeVar2.getTypeVarDef().getTypeVar())
-        .withParameters(new ParameterInfoBuilder()
-          .withName("type")
-          .withType(typeVarType2))
-        .withReturnType(JavaTypes.LIST().getParameterizedType(typeVar2))
-        .withCallHandler(new IMethodCallHandler() {
-          @Override
-          public Object handleCall(Object ctx, Object... args) {
-            JsonMap ctxMap = (JsonMap) ctx;
-            return ctxMap.findDescendents((IType) args[0]);
-          }
-        })
-        .build(JSchemaTypeInfo.this);
-      typeMethods.add(_findMethod);
-
       return typeMethods;
     }
   }
 
   private static void addStaticProductionMethods(List<IMethodInfo> typeMethods, final IType producedType, ITypeInfo owner) {
+
     typeMethods.add(parseMethod(producedType)
       .withParameters(new ParameterInfoBuilder()
         .withType(JavaTypes.STRING())
@@ -188,6 +142,7 @@ public class JSchemaTypeInfo extends TypeInfoBase {
         }
       })
       .build(owner));
+
     typeMethods.add(parseMethod(producedType)
       .withParameters(new ParameterInfoBuilder()
         .withType(TypeSystem.get(java.net.URL.class))
@@ -211,6 +166,7 @@ public class JSchemaTypeInfo extends TypeInfoBase {
         }
       })
       .build(owner));
+
     typeMethods.add(new MethodInfoBuilder()
       .withName("get")
       .withParameters(new ParameterInfoBuilder()
@@ -227,14 +183,7 @@ public class JSchemaTypeInfo extends TypeInfoBase {
         @Override
         public Object handleCall(Object ctx, Object... args) {
           Map<String, String> fixedArgs = fixArgs((Map) args[1]);
-          RPCLoggerCallback logger = RPCDefaults.getLogger();
-          if (logger != null) {
-            logger.log("Calling " + args[0] + " with args " + fixedArgs);
-          }
           String response = SimpleRPCCallHandler.doGet((String) args[0], fixedArgs);
-          if (logger != null) {
-            logger.log("Got response " + response);
-          }
           return JSchemaUtils.parseJson(response, producedType);
         }
       })
@@ -410,7 +359,7 @@ public class JSchemaTypeInfo extends TypeInfoBase {
   }
 
   private IAnnotationInfo makeListAutoInsertAnnotation() {
-    return new ClassAnnotationInfo(Annotations.create(Autoinsert.class), getOwnersType());
+    return new JSONAnnotationInfo(JavaTypes.AUTOINSERT(), null);
   }
 
   private IAnnotationInfo makeAutocreateAnnotation(Function0 function) {
@@ -419,7 +368,7 @@ public class JSchemaTypeInfo extends TypeInfoBase {
     for (IConstructorInfo constructor : constructors) {
       if (constructor.getParameters().length == 1) {
         final Object val = constructor.getConstructor().newInstance(function);
-        return new AutoCreateAnnotationInfo(autocreateType, val);
+        return new JSONAnnotationInfo(autocreateType, val);
       }
     }
     throw new IllegalStateException("Could not find the block constructor for Autocreate");
@@ -457,7 +406,7 @@ public class JSchemaTypeInfo extends TypeInfoBase {
   }
 
 	@Override
-	public List<? extends IMethodInfo> getMethods() {
+	public MethodList getMethods() {
 		return methods.get();
 	}
 
@@ -471,16 +420,6 @@ public class JSchemaTypeInfo extends TypeInfoBase {
 		for (IPropertyInfo prop : properties) {
 			if (propName.equals(prop.getName())) {
 				return prop;
-			}
-		}
-		return null;
-	}
-
-	@Override
-	public CharSequence getRealPropertyName(CharSequence propName) {
-		for (IPropertyInfo prop : properties) {
-			if (propName.equals(prop.getName())) {
-				return prop.getName();
 			}
 		}
 		return null;
@@ -536,18 +475,18 @@ public class JSchemaTypeInfo extends TypeInfoBase {
     return getOwnersType() instanceof JSchemaListWrapperType;
   }
 
-  private class AutoCreateAnnotationInfo implements IAnnotationInfo {
-    private final IType autocreateType;
+  private class JSONAnnotationInfo implements IAnnotationInfo {
+    private final IType type;
     private final Object val;
 
-    public AutoCreateAnnotationInfo(IType autocreateType, Object val) {
-      this.autocreateType = autocreateType;
+    public JSONAnnotationInfo( IType type, Object val ) {
+      this.type = type;
       this.val = val;
     }
 
     @Override
     public IType getType() {
-      return autocreateType;
+      return type;
     }
 
     @Override
@@ -562,7 +501,7 @@ public class JSchemaTypeInfo extends TypeInfoBase {
 
     @Override
     public String getName() {
-      return autocreateType.getName();
+      return type.getName();
     }
 
     @Override

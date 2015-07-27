@@ -1,6 +1,5 @@
 package org.jschema.parser;
 
-import gw.internal.gosu.parser.TypeLord;
 import gw.lang.reflect.IType;
 import gw.lang.reflect.java.JavaTypes;
 import org.jschema.model.JsonMap;
@@ -78,14 +77,6 @@ public class JSchemaParser extends JSONParser {
           jschemaType = (IJSchemaType) _currentType;
         }
 
-        IType mapValueType = null;
-        if (ctxType != null && JavaTypes.MAP().isAssignableFrom(ctxType)) {
-          IType parameterizedType = TypeLord.findParameterizedType(ctxType, JavaTypes.MAP().getGenericType());
-          if (parameterizedType != null) {
-            mapValueType = parameterizedType.getTypeParameters()[1];
-          }
-        }
-
         try {
           do {
             String key = parseString();
@@ -99,9 +90,8 @@ public class JSchemaParser extends JSONParser {
 
             if (jschemaType != null) {
               _currentType = jschemaType.getTypeForJsonSlot(key);
-            } else if (mapValueType != null) {
-              _currentType = mapValueType;
             }
+
             if(JSchemaUtils.JSCHEMA_TYPEDEFS_KEY.equals(key)){
               _processingTypedefs = true;
             }

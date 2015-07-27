@@ -1,6 +1,5 @@
 package org.jschema.parser;
 
-import gw.internal.gosu.parser.TypeLord;
 import gw.lang.reflect.IEnumType;
 import gw.lang.reflect.IEnumValue;
 import gw.lang.reflect.IType;
@@ -265,7 +264,7 @@ public class JSONParser {
         IType lstType = _currentType;
         try {
           if (lstType != null) {
-            IType parameterizedType = TypeLord.findParameterizedType(lstType, JavaTypes.LIST().getGenericType());
+            IType parameterizedType = TypeSystem.findParameterizedType(lstType, JavaTypes.LIST().getGenericType());
             if (parameterizedType != null) {
              _currentType = parameterizedType.getTypeParameters()[0];
             }
@@ -299,14 +298,6 @@ public class JSONParser {
           jschemaType = (IJSchemaType) _currentType;
         }
 
-        IType mapValueType = null;
-        if (ctxType != null && JavaTypes.MAP().isAssignableFrom(ctxType)) {
-          IType parameterizedType = TypeLord.findParameterizedType(ctxType, JavaTypes.MAP().getGenericType());
-          if (parameterizedType != null && parameterizedType.getTypeParameters() != null) {
-            mapValueType = parameterizedType.getTypeParameters()[1];
-          }
-        }
-
         try {
           do {
             String key = parseString();
@@ -320,9 +311,8 @@ public class JSONParser {
 
             if (jschemaType != null) {
               _currentType = jschemaType.getTypeForJsonSlot(key);
-            } else if (mapValueType != null) {
-              _currentType = mapValueType;
             }
+
             Object value = parseValueImpl();
             putWithSemantics(map, key, value);
           } while (match(","));

@@ -1,4 +1,4 @@
-package org.jschema.rpc;
+package org.jschema.util;
 
 import gw.util.GosuExceptionUtil;
 
@@ -9,9 +9,8 @@ import java.net.URLEncoder;
 import java.util.Collections;
 import java.util.Map;
 
-public class SimpleRPCCallHandler implements RPCCallHandler {
+public class SimpleRPCCallHandler {
 
-  @Override
   public String handleCall(String method, String url, Map<String, String> args) {
     if (method.equalsIgnoreCase("GET")) {
       return doGet(url, args);
@@ -27,16 +26,11 @@ public class SimpleRPCCallHandler implements RPCCallHandler {
       URL urlObj = new URL(url);
       URLConnection urlConnection = urlObj.openConnection();
       urlConnection.setDoOutput(true);
-      OutputStream outputStream = urlConnection.getOutputStream();
-      try
+      try (OutputStream outputStream = urlConnection.getOutputStream())
       {
-        outputStream.write(sb.toString().getBytes());
+        outputStream.write( sb.toString().getBytes() );
         InputStream inputStream = urlConnection.getInputStream();
-        return readResponse(inputStream);
-      }
-      finally
-      {
-        outputStream.close();
+        return readResponse( inputStream );
       }
     } catch (Exception e) {
       throw GosuExceptionUtil.forceThrow(e);

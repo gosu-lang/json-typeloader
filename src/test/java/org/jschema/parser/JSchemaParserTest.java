@@ -1,22 +1,22 @@
 package org.jschema.parser;
 
 import org.jschema.model.JsonMap;
-import org.jschema.test.GosonTest;
 import org.jschema.util.JSchemaUtils;
+import org.junit.Assert;
 import org.junit.Ignore;
-
-import java.util.Map;
+import org.junit.Test;
 
 @Ignore
-public class JSchemaParserTest extends GosonTest {
+public class JSchemaParserTest {
 
+  @Test
   public void testTypedefsMustBeFollowedByObject()
   {
     String badJSchema = "{ \"typedefs@\" : \"foo\" }";
     JSchemaParser parser = new JSchemaParser(badJSchema);
     try{
       parser.parseJSchema();
-      fail("Execption not thrown");
+      Assert.fail( "Execption not thrown" );
     }
     catch(JsonParseException jpe){
       // gulp
@@ -32,6 +32,7 @@ public class JSchemaParserTest extends GosonTest {
     parser.parseJSchema();
   }
 
+  @Test
   public void testMutltipleTypedefsAreMerged()
   {
     String schema = "{ \n" +
@@ -50,7 +51,7 @@ public class JSchemaParserTest extends GosonTest {
     JSchemaParser parser = new JSchemaParser(schema);
     JsonMap schemaMap = (JsonMap) parser.parseJSchema();
     JsonMap typedefsMap = (JsonMap) schemaMap.get(JSchemaUtils.JSCHEMA_TYPEDEFS_KEY);
-    assertEquals(2, typedefsMap.size());
+    Assert.assertEquals( 2, typedefsMap.size() );
   }
 
   public void testDuplicateTypesdefsAreErrors()
@@ -71,7 +72,7 @@ public class JSchemaParserTest extends GosonTest {
     JSchemaParser parser = new JSchemaParser(schema);
     try{
       parser.parseJSchema();
-      fail("Exception not thrown");
+      Assert.fail( "Exception not thrown" );
     }
     catch(JsonParseException jpe){
       System.out.println(jpe.toString());
@@ -95,7 +96,7 @@ public class JSchemaParserTest extends GosonTest {
     JSchemaParser parser = new JSchemaParser(schema);
     try{
       parser.parseJSchema();
-      fail("Exception not thrown");
+      Assert.fail( "Exception not thrown" );
     }
     catch(JsonParseException jpe){
       System.out.println(jpe.toString());
@@ -103,6 +104,7 @@ public class JSchemaParserTest extends GosonTest {
     }
   }
 
+  @Test
   public void testDuplicateFieldDefsAreErrors()
   {
 
@@ -116,7 +118,7 @@ public class JSchemaParserTest extends GosonTest {
     JSchemaParser parser = new JSchemaParser(badSchema);
     try{
       parser.parseJSchema();
-      fail("Exception not thrown");
+      Assert.fail( "Exception not thrown" );
     }
     catch(JsonParseException jpe){
       System.out.println(jpe);
@@ -132,13 +134,14 @@ public class JSchemaParserTest extends GosonTest {
     parser = new JSchemaParser(badSchema);
     try{
       parser.parseJSchema();
-      fail("Exception not thrown");
+      Assert.fail( "Exception not thrown" );
     }
     catch(JsonParseException jpe){
       // gulp
     }
   }
 
+  @Test
   public void testFunctionsKeywordMustBeFollowedByAnArray()
   {
     String badSchema = "{\n" +
@@ -153,7 +156,7 @@ public class JSchemaParserTest extends GosonTest {
     JSchemaParser parser = new JSchemaParser(badSchema);
     try{
       parser.parseJSchema();
-      fail("Exception not thrown");
+      Assert.fail( "Exception not thrown" );
     }
     catch(JsonParseException jpe){
       System.out.println(jpe);

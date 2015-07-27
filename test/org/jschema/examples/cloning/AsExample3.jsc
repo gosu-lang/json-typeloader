@@ -1,0 +1,9 @@
+{
+  "name" : "string",
+  "value" : "int",
+  "nested" : {
+    "name" : "string",
+    "value" : "int"
+  },
+  "enum1" : { "enum" : [ "val2", "val3" ] }
+}

@@ -1,0 +1,26 @@
+{
+  "description" : "Methods for manipulating employees",
+
+  "url" : "http://localhost:12321/sample1",
+
+  "typedefs@" : {
+    "Employee" : { "first_name" : "string",
+                    "last_name" : "string",
+                    "age" : "int",
+                    "id" : "number"
+                 }
+  },
+
+  "functions" : [
+    { "name" : "getEmployee",
+      "description" : "Returns the employee of the given name",
+      "args" : [ {"id" : "int"} ],
+      "returns" : "Employee"
+    },
+    { "name" : "updateEmployee",
+      "description" : "Updates the given employee",
+      "args" : [ {"employee" : "Employee"} ],
+      "returns" : "boolean"
+    }
+  ]
+}

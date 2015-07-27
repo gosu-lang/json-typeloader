@@ -1,0 +1,9 @@
+{ "id_to_people" : {
+    "map_of" : { "name" : "string", 
+                "age" : "int",
+                "eye_color" : {"enum" : ["brown", 
+                                         "blue", 
+                                         "green"]}
+    }
+  }
+}

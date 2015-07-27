@@ -1,2 +1,0 @@
-{ "people" : [ { "name" : "string", 
-                 "age" : "int"} ] }

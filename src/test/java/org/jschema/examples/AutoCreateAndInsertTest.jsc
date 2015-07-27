@@ -1,5 +1,0 @@
-{ "name" : "string",
-  "reference" : "self",
-  "arr" : ["self"],
-  "map" : {"map_of" : "self"}
-}

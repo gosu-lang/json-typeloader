@@ -1,5 +1,6 @@
 package org.jschema.typeloader;
 
+import gw.fs.IFile;
 import gw.lang.reflect.IType;
 import gw.lang.reflect.ITypeLoader;
 import gw.lang.reflect.TypeSystem;
@@ -12,8 +13,8 @@ public class JSchemaListWrapperType extends JSchemaTypeBase implements IJsonType
 
   private int _depth;
 
-  public JSchemaListWrapperType(String name, ITypeLoader typeloader, final int depth, Object o) {
-    super(name, typeloader, o);
+  public JSchemaListWrapperType(String name, ITypeLoader typeloader, final int depth, Object o, IFile f) {
+    super(name, typeloader, o, f);
     _depth = depth;
   }
 

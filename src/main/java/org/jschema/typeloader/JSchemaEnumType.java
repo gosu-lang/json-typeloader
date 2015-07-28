@@ -1,5 +1,6 @@
 package org.jschema.typeloader;
 
+import gw.fs.IFile;
 import gw.lang.reflect.*;
 import gw.lang.reflect.gs.IGosuObject;
 import org.jschema.util.JSchemaUtils;
@@ -11,8 +12,8 @@ public class JSchemaEnumType extends JSchemaType implements IJSchemaEnumType {
 
   private List<IEnumValue> values = new ArrayList<IEnumValue>();
 
-  public JSchemaEnumType(String name, ITypeLoader typeloader, final Object object) {
-    super(name, typeloader, object, new HashMap<String, String>());
+  public JSchemaEnumType(String name, ITypeLoader typeloader, final Object object, IFile f) {
+    super(name, typeloader, object, new HashMap<String, String>(), f);
     Object obj = ((Map)object).get(JSchemaUtils.JSCHEMA_ENUM_KEY);
     if (obj == null || !(obj instanceof List)) {
       throw new RuntimeException("An enum must be an array of values.");

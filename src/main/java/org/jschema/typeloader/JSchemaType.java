@@ -1,5 +1,6 @@
 package org.jschema.typeloader;
 
+import gw.fs.IFile;
 import gw.lang.reflect.*;
 
 import java.util.HashSet;
@@ -9,8 +10,8 @@ public class JSchemaType extends JSchemaTypeBase implements IJsonType {
 
   private Map<String, String> _typeDefs;
 
-  public JSchemaType(String name, ITypeLoader typeloader, final Object object, Map<String, String> typeDefs) {
-    super(name, typeloader, object);
+  public JSchemaType(String name, ITypeLoader typeloader, final Object object, Map<String, String> typeDefs, IFile f) {
+    super(name, typeloader, object, f);
     _typeDefs = typeDefs;
   }
 

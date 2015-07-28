@@ -1,5 +1,6 @@
 package org.jschema.typeloader;
 
+import gw.fs.IFile;
 import gw.lang.reflect.*;
 import gw.lang.reflect.java.IJavaType;
 import gw.lang.reflect.java.JavaTypes;
@@ -14,7 +15,7 @@ import java.net.URI;
 import java.util.*;
 import java.util.logging.Logger;
 
-public abstract class JSchemaTypeBase extends TypeBase implements IJSchemaType, IProvidesCustomErrorInfo {
+public abstract class JSchemaTypeBase extends TypeBase implements IJSchemaType, IProvidesCustomErrorInfo, IFileBasedType {
   private static final long serialVersionUID = -8034222055932240161L;
 
   private static final Map<String, IJavaType> TYPES = new HashMap<String, IJavaType>();
@@ -26,7 +27,6 @@ public abstract class JSchemaTypeBase extends TypeBase implements IJSchemaType, 
     TYPES.put("uri", (IJavaType) TypeSystem.get(URI.class));
     TYPES.put("boolean", JavaTypes.BOOLEAN());
     TYPES.put("enum", JavaTypes.ENUM());
-    TYPES.put("map_of", JavaTypes.MAP());
     TYPES.put("object", JavaTypes.OBJECT());
   }
 
@@ -34,12 +34,13 @@ public abstract class JSchemaTypeBase extends TypeBase implements IJSchemaType, 
   private String packageName;
   private String fullName;
   private ITypeLoader loader;
+  private IFile file;
   private LockingLazyVar<ITypeInfo> typeInfo;
   private Logger logger = Logger.getLogger(getClass().getName());
   private Map<String, IType> _innerClasses;
   private List<CustomErrorInfo> _errors;
 
-  public JSchemaTypeBase(String name, ITypeLoader typeloader, final Object object) {
+  public JSchemaTypeBase(String name, ITypeLoader typeloader, final Object object, IFile file) {
     this.relativeName = GosuClassUtil.getShortClassName(name);
     this.packageName = GosuClassUtil.getPackage(name);
     this.fullName = name;
@@ -50,6 +51,7 @@ public abstract class JSchemaTypeBase extends TypeBase implements IJSchemaType, 
         return initTypeInfo(object);
       }
     };
+    this.file = file;
     _innerClasses = new HashMap<String, IType>();
     _errors = new ArrayList<CustomErrorInfo>();
   }
@@ -159,6 +161,12 @@ public abstract class JSchemaTypeBase extends TypeBase implements IJSchemaType, 
   @Override
   public List<CustomErrorInfo> getCustomErrors() {
     return _errors;
+  }
+
+  @Override
+  public IFile[] getSourceFiles()
+  {
+    return new IFile[]{file};
   }
 
   public void addErrors(List<JsonParseError> errors) {

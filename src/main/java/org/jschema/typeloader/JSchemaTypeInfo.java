@@ -33,6 +33,14 @@ public class JSchemaTypeInfo extends TypeInfoBase {
   };
   private IMethodInfo _convertToMethod;
   private IMethodInfo _findMethod;
+  private LockingLazyVar<List<IConstructorInfo>> _constructorList = new LockingLazyVar<List<IConstructorInfo>>()
+  {
+    @Override
+    protected List<IConstructorInfo> init()
+    {
+      return initConstructors();
+    }
+  };
 
   private MethodList buildMethods() {
     if (isJsonEnum()) {
@@ -59,6 +67,7 @@ public class JSchemaTypeInfo extends TypeInfoBase {
           }
         })
         .build(JSchemaTypeInfo.this));
+
       typeMethods.add(new MethodInfoBuilder()
         .withName("prettyPrint")
         .withParameters(new ParameterInfoBuilder()
@@ -107,7 +116,7 @@ public class JSchemaTypeInfo extends TypeInfoBase {
           public Object handleCall(Object ctx, Object... args) {
             JsonMap jsonMap = (JsonMap) ctx;
             JsonObject parent = jsonMap.getParent();
-            while (parent != null && !isStronglyTypedMap(parent)) {
+            while (parent != null) {
               parent = parent.getParent();
             }
             return parent;
@@ -323,16 +332,16 @@ public class JSchemaTypeInfo extends TypeInfoBase {
           }
         });
 
-        if (propType instanceof IEnumType) {
-          //ignore
-        } else if (propType instanceof IJSchemaType) {
-          pib.withAnnotations(makeMapAutoCreateAnnotation(propType));
-        } else if (TypeSystem.get(JsonMap.class).equals(propType.getGenericType())) {
-          pib.withAnnotations(makeMapAutoCreateAnnotation(propType));
-        } else if (TypeSystem.get(JsonList.class).equals(propType.getGenericType())) {
-          pib.withAnnotations(makeListAutoCreateAnnotation(propType),
-            makeListAutoInsertAnnotation());
-        }
+//        if (propType instanceof IEnumType) {
+//          //ignore
+//        } else if (propType instanceof IJSchemaType) {
+//          pib.withAnnotations(makeMapAutoCreateAnnotation(propType));
+//        } else if (TypeSystem.get(JsonMap.class).equals(propType.getGenericType())) {
+//          pib.withAnnotations(makeMapAutoCreateAnnotation(propType));
+//        } else if (TypeSystem.get(JsonList.class).equals(propType.getGenericType())) {
+//          pib.withAnnotations(makeListAutoCreateAnnotation(propType),
+//            makeListAutoInsertAnnotation());
+//        }
 
         props.add(pib.build(this));
       }
@@ -340,67 +349,83 @@ public class JSchemaTypeInfo extends TypeInfoBase {
     return props;
   }
 
-  private IAnnotationInfo makeMapAutoCreateAnnotation(final IType propType) {
-    return makeAutocreateAnnotation(new Function0() {
-      @Override
-      public Object invoke() {
-        return new JsonMap(propType);
-      }
-    });
-  }
-
-  private IAnnotationInfo makeListAutoCreateAnnotation(final IType propType) {
-    return makeAutocreateAnnotation(new Function0() {
-      @Override
-      public Object invoke() {
-        return new JsonList(propType);
-      }
-    });
-  }
-
-  private IAnnotationInfo makeListAutoInsertAnnotation() {
-    return new JSONAnnotationInfo(JavaTypes.AUTOINSERT(), null);
-  }
-
-  private IAnnotationInfo makeAutocreateAnnotation(Function0 function) {
-    final IType autocreateType = TypeSystem.getByFullName("gw.lang.Autocreate");
-    List<? extends IConstructorInfo> constructors = autocreateType.getTypeInfo().getConstructors();
-    for (IConstructorInfo constructor : constructors) {
-      if (constructor.getParameters().length == 1) {
-        final Object val = constructor.getConstructor().newInstance(function);
-        return new JSONAnnotationInfo(autocreateType, val);
-      }
-    }
-    throw new IllegalStateException("Could not find the block constructor for Autocreate");
-  }
-
-  private boolean isStronglyTypedMap(JsonObject parent) {
-    if (parent instanceof JsonMap) {
-      return parent.getIntrinsicType() instanceof IJSchemaType;
-    } else {
-      return false;
-    }
-  }
-
+//  private IAnnotationInfo makeMapAutoCreateAnnotation(final IType propType) {
+//    return makeAutocreateAnnotation(new Function0() {
+//      @Override
+//      public Object invoke() {
+//        return new JsonMap(propType);
+//      }
+//    });
+//  }
+//
+//  private IAnnotationInfo makeListAutoCreateAnnotation(final IType propType) {
+//    return makeAutocreateAnnotation(new Function0() {
+//      @Override
+//      public Object invoke() {
+//        return new JsonList(propType);
+//      }
+//    });
+//  }
+//
+//  private IAnnotationInfo makeListAutoInsertAnnotation() {
+//    return new JSONAnnotationInfo(JavaTypes.AUTOINSERT(), null);
+//  }
+//
+//  private IAnnotationInfo makeAutocreateAnnotation(Function0 function) {
+//    final IType autocreateType = TypeSystem.getByFullName("gw.lang.Autocreate");
+//    List<? extends IConstructorInfo> constructors = autocreateType.getTypeInfo().getConstructors();
+//    for (IConstructorInfo constructor : constructors) {
+//      if (constructor.getParameters().length == 1) {
+//        final Object val = constructor.getConstructor().newInstance(function);
+//        return new JSONAnnotationInfo(autocreateType, val);
+//      }
+//    }
+//    throw new IllegalStateException("Could not find the block constructor for Autocreate");
+//  }
+//
+//  private boolean isStronglyTypedMap(JsonObject parent) {
+//    if (parent instanceof JsonMap) {
+//      return parent.getIntrinsicType() instanceof IJSchemaType;
+//    } else {
+//      return false;
+//    }
+//  }
+//
   private boolean thisIsTypedefFor(IJSchemaType outerParent) {
     return  outerParent.getTypeDefs().containsValue(getOwnersType().getName());
   }
 
-  private IConstructorInfo defaultConstructor = new ConstructorInfoBuilder()
-			.withConstructorHandler(new IConstructorHandler() {
-				@Override
-				public Object newInstance(Object... args) {
-          return new JsonMap(getOwnersType());
-        }
-			}).withAccessibility(Accessibility.PUBLIC).build(this);
+  @Override
+  public List<? extends IConstructorInfo> getConstructors() {
+    return _constructorList.get();
+  }
 
-	@Override
-	public List<? extends IConstructorInfo> getConstructors() {
+  @Override
+  public IConstructorInfo getConstructor(IType... vars) {
+    return FIND.constructor( getConstructors(), vars );
+  }
+
+  @Override
+  public IConstructorInfo getCallableConstructor( IType... params )
+  {
+    return FIND.callableConstructor( getConstructors(), params );
+  }
+
+	public List<IConstructorInfo> initConstructors() {
     if (isJsonEnum() || isListWrapper()) {
       return Collections.emptyList();
     } else {
       List<IConstructorInfo> constructors = new ArrayList<IConstructorInfo>();
-      constructors.add(defaultConstructor);
+      IConstructorInfo constructorInfo = new ConstructorInfoBuilder()
+        .withDescription( "Creates a new Table object" )
+        .withParameters()
+        .withConstructorHandler( new IConstructorHandler() {
+          @Override
+          public Object newInstance(Object... args) {
+            return new JsonMap(getOwnersType());
+          }
+        } ).build(this);
+      constructors.add(constructorInfo);
       return constructors;
     }
   }

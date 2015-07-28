@@ -177,7 +177,7 @@ public class JSchemaTypeLoader extends TypeLoaderBase {
         jshFile.content = ((List) jshFile.content).get(0);
       }
       addTypes(rawTypes, typeDefs, jshFile.rootTypeName + ".Element", jshFile.content, file, fileMapping);
-      JSchemaListWrapperType rawType = new JSchemaListWrapperType(jshFile.rootTypeName, this, depth, jshFile.content);
+      JSchemaListWrapperType rawType = new JSchemaListWrapperType(jshFile.rootTypeName, this, depth, jshFile.content, jshFile.file );
       rawTypes.put(jshFile.rootTypeName, rawType);
       rawType.addErrors(jshFile.errors);
     } else {
@@ -198,7 +198,7 @@ public class JSchemaTypeLoader extends TypeLoaderBase {
     if (o instanceof Map) {
       Map<Object, Object> jsonMap = (Map<Object, Object>)o;
       if (jsonMap.get(JSchemaUtils.JSCHEMA_ENUM_KEY) != null) {
-        putType(rawTypes, name, new JSchemaEnumType(name, this, o), file, fileMapping);
+        putType(rawTypes, name, new JSchemaEnumType(name, this, o, file), file, fileMapping);
       } else if (jsonMap.get("map_of") != null) {
         addTypes(rawTypes, typeDefs, name, jsonMap.get("map_of"), file, fileMapping);
       } else {
@@ -213,7 +213,7 @@ public class JSchemaTypeLoader extends TypeLoaderBase {
               }
             }
           }
-          putType(rawTypes, name, new JSchemaType(name, this, o, copyTypeDefs(typeDefs)), file, fileMapping);
+          putType(rawTypes, name, new JSchemaType(name, this, o, copyTypeDefs(typeDefs), file), file, fileMapping);
         } finally {
           typeDefs.pop();
         }
